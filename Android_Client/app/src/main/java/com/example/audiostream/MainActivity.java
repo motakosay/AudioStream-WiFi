@@ -77,7 +77,7 @@ public class MainActivity extends Activity {
                     );
                     audioTrack.play();
 
-                    runOnUiThread(() -> statusView.setText("Connected ✔️"));
+                    runOnUiThread(() -> statusView.setText("Connected :) !"));
 
                     byte[] buffer = new byte[4096];
                     int read;
