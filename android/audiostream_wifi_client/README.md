@@ -13,6 +13,9 @@ Example:
 
 ```java
 AudioStreamClient client = new AudioStreamClient("192.168.1.10", 8765);
-client.setPassword("secret");
-client.setUseOpus(false); // or true if you enabled Opus on server + decoder available
-// to complete
+client.setPassword("secret"); // optional
+client.setUseOpus(false); // // optional
+client.setConnectionListener(listener); // optional
+client.start();
+...
+client.stop();
