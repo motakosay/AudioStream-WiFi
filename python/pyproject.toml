@@ -1,0 +1,17 @@
+[project]
+name = "wifiaudiolink-server"
+version = "0.1.0"
+description = "WiFiAudioLink - lightweight Python audio streamer for LAN"
+requires-python = ">=3.8"
+readme = "README.md"
+authors = [ { name = "motakosay" } ]
+
+
+[project.dependencies]
+pyaudio = "*"
+# opuslib optional; keep minimal core dependency
+
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
