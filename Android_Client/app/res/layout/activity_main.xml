@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <EditText
+        android:id="@+id/ipInput"
+        android:hint="Enter PC IP"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="text"/>
+
+    <Button
+        android:id="@+id/connectBtn"
+        android:text="Connect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <Button
+        android:id="@+id/stopBtn"
+        android:text="Stop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" />
+
+    <TextView
+        android:id="@+id/statusView"
+        android:text="Status: Disconnected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp"/>
+</LinearLayout>
