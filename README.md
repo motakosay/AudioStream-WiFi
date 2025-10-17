@@ -14,3 +14,6 @@ Stream your computer's audio live to your Android phone over Wi-Fi — works eve
 - jitter
 - password
 - opus
+
+## tips
+- remove temp, %temp% to sync picture & sound
