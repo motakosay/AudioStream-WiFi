@@ -9,3 +9,5 @@ Stream your computer's audio live to your Android phone over Wi-Fi — works eve
 - Adjustable IP input on Android
 - Simple, no external libraries
 - Works with VB-Cable or any virtual audio device
+
+## Feel free to contribute.
