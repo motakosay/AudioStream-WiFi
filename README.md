@@ -11,9 +11,9 @@ Stream your computer's audio live to your Android phone over Wi-Fi — works eve
 - Works with VB-Cable or any virtual audio device
 
 ## Feel free to contribute.
-- jitter
 - password
 - opus
 
 ## tips
 - remove temp, %temp% to sync picture & sound
+- the app disconnects due to system power-saving policies. (you need to 'not optimize Battery' option)
