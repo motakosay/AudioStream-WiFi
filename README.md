@@ -1,6 +1,6 @@
 # 🎧 PC ↔ Android Audio Stream
 
-Stream your computer's audio live to your Android phone over Wi-Fi — works even with Bluetooth headphones connected to the phone!
+Stream your computer's audio live to your Android phone over Wi-Fi — works even with Bluetooth headphones connected to the phone!(no ADS)
 
 ---
 
@@ -17,3 +17,4 @@ Stream your computer's audio live to your Android phone over Wi-Fi — works eve
 ## tips
 - remove temp, %temp% to sync picture & sound
 - the app disconnects due to system power-saving policies. (you need to 'not optimize Battery' option)
+
