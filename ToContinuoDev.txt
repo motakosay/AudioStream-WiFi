@@ -3,16 +3,13 @@
 import pyaudio
 import socket
 import threading
-import time
 
 # 🎚️ Audio settings
-CHUNK = 500 #chunks basic = 1024
+CHUNK = 1024
 FORMAT = pyaudio.paInt16
-CHANNELS = 1  # Change to 1 for mono #basic 2
 RATE = 48000
-PORT = 8765  # Must match Android app
+PORT = 8765
 
-# 🎛️ Initialize PyAudio
 p = pyaudio.PyAudio()
 
 # 🔍 Find VB-Cable input device
@@ -26,23 +23,33 @@ def find_vb_cable():
 
 input_index = find_vb_cable()
 
-# 🎤 Open audio stream
-stream = p.open(format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                input_device_index=input_index,
-                frames_per_buffer=CHUNK)
-
 clients = []
 
 # 🧵 Handle each client
 def client_handler(conn, addr):
     print(f"🔗 Connected: {addr}")
     try:
+        # First message from client = channel request
+        handshake = conn.recv(16).decode().strip()
+        if handshake.startswith("CHANNELS:"):
+            channels = int(handshake.split(":")[1])
+        else:
+            channels = 1  # default mono
+
+        print(f"🎛️ Client {addr} requested {channels} channel(s)")
+
+        # Open audio stream with requested channels
+        stream = p.open(format=FORMAT,
+                        channels=channels,
+                        rate=RATE,
+                        input=True,
+                        input_device_index=input_index,
+                        frames_per_buffer=CHUNK)
+
         while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             conn.sendall(data)
+
     except Exception as e:
         print(f"⚡ Disconnected: {addr} — {type(e).__name__}: {e}")
     finally:
@@ -50,6 +57,11 @@ def client_handler(conn, addr):
             conn.close()
             clients.remove(conn)
         except ValueError:
+            pass
+        try:
+            stream.stop_stream()
+            stream.close()
+        except Exception:
             pass
 
 # 🌐 TCP server setup
@@ -68,12 +80,11 @@ except KeyboardInterrupt:
     print("🕊️ Graceful shutdown initiated...")
 finally:
     server.close()
-    stream.stop_stream()
-    stream.close()
     p.terminate()
     print("🔚 Audio stream closed.")
 
-//AndroidManifest.xml
+
+//AndroidMainfest.xml
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.audiostream">
@@ -105,9 +116,11 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.RadioButton;
 import android.widget.TextView;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 public class MainActivity extends Activity {
@@ -117,6 +130,7 @@ public class MainActivity extends Activity {
     private Thread streamThread = null;
     private Socket socket = null;
     private String currentIp = "";
+    private int currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO; // default mono
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,11 +143,18 @@ public class MainActivity extends Activity {
         int connectBtnId = getResources().getIdentifier("connectBtn", "id", getPackageName());
         int stopBtnId = getResources().getIdentifier("stopBtn", "id", getPackageName());
         int statusViewId = getResources().getIdentifier("statusView", "id", getPackageName());
+        int monoBtnId = getResources().getIdentifier("monoBtn", "id", getPackageName());
+        int stereoBtnId = getResources().getIdentifier("stereoBtn", "id", getPackageName());
 
         final EditText ipInput = findViewById(ipInputId);
         Button connectBtn = findViewById(connectBtnId);
         Button stopBtn = findViewById(stopBtnId);
         statusView = findViewById(statusViewId);
+        final RadioButton monoBtn = findViewById(monoBtnId);
+        final RadioButton stereoBtn = findViewById(stereoBtnId);
+
+        // Default selection
+        monoBtn.setChecked(true);
 
         connectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -141,6 +162,11 @@ public class MainActivity extends Activity {
                 final String ip = ipInput.getText().toString().trim();
                 if (!ip.isEmpty()) {
                     currentIp = ip;
+                    if (monoBtn.isChecked()) {
+                        currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
+                    } else if (stereoBtn.isChecked()) {
+                        currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                    }
                     startStreaming(ip);
                 } else {
                     statusView.setText("Enter a valid IP!");
@@ -173,18 +199,25 @@ public class MainActivity extends Activity {
                         });
 
                         socket = new Socket(ip, 8765);
+
+                        // Handshake: tell server mono or stereo
+                        String handshake = "CHANNELS:" + (currentChannelConfig == AudioFormat.CHANNEL_OUT_MONO ? "1" : "2");
+                        OutputStream out = socket.getOutputStream();
+                        out.write(handshake.getBytes());
+                        out.flush();
+
                         InputStream in = socket.getInputStream();
 
                         int minBuf = AudioTrack.getMinBufferSize(
                                 48000,
-                                AudioFormat.CHANNEL_OUT_STEREO,
+                                currentChannelConfig,
                                 AudioFormat.ENCODING_PCM_16BIT
                         );
 
                         audioTrack = new AudioTrack(
                                 AudioManager.STREAM_MUSIC,
                                 48000,
-                                AudioFormat.CHANNEL_OUT_STEREO,
+                                currentChannelConfig,
                                 AudioFormat.ENCODING_PCM_16BIT,
                                 minBuf,
                                 AudioTrack.MODE_STREAM
@@ -198,10 +231,13 @@ public class MainActivity extends Activity {
                             }
                         });
 
-                        byte[] buffer = new byte[4096];
+                        byte[] buffer = new byte[minBuf];
                         int read;
                         while (isStreaming && (read = in.read(buffer)) != -1) {
-                            audioTrack.write(buffer, 0, read);
+                            int written = audioTrack.write(buffer, 0, read);
+                            if (written < 0) {
+                                resetAudioTrack();
+                            }
                         }
 
                     } catch (Exception e) {
@@ -211,14 +247,13 @@ public class MainActivity extends Activity {
                                 statusView.setText("Connection lost, retrying...");
                             }
                         });
-                        cleanupAudioOnly(); // don't stop the loop, just reset audio
-                        sleep(2000); // wait before retry
+                        cleanupAudioOnly();
+                        sleep(2000);
                     } finally {
                         cleanupSocketOnly();
                     }
                 }
-                cleanup(); // final cleanup when stopped
-
+                cleanup();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -229,6 +264,24 @@ public class MainActivity extends Activity {
         });
 
         streamThread.start();
+    }
+
+    private void resetAudioTrack() {
+        cleanupAudioOnly();
+        int minBuf = AudioTrack.getMinBufferSize(
+                48000,
+                currentChannelConfig,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+        audioTrack = new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                48000,
+                currentChannelConfig,
+                AudioFormat.ENCODING_PCM_16BIT,
+                minBuf,
+                AudioTrack.MODE_STREAM
+        );
+        audioTrack.play();
     }
 
     private void stopStreaming() {
@@ -295,18 +348,51 @@ public class MainActivity extends Activity {
         android:layout_height="wrap_content"
         android:inputType="text"/>
 
+    <!-- Label for audio mode selection -->
+    <TextView
+        android:id="@+id/channelLabel"
+        android:text="Select Audio Mode:"
+        android:textStyle="bold"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingTop="12dp"
+        android:paddingBottom="4dp"/>
+
+    <!-- Grouped Mono/Stereo selection -->
+    <RadioGroup
+        android:id="@+id/channelGroup"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/monoBtn"
+            android:text="Mono"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"/> <!-- ✅ Default selection -->
+
+        <RadioButton
+            android:id="@+id/stereoBtn"
+            android:text="Stereo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"/>
+    </RadioGroup>
+
     <Button
         android:id="@+id/connectBtn"
         android:text="Connect"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"/>
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"/>
 
     <Button
         android:id="@+id/stopBtn"
         android:text="Stop"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp" />
+        android:layout_marginTop="12dp"/>
 
     <TextView
         android:id="@+id/statusView"
@@ -317,7 +403,6 @@ public class MainActivity extends Activity {
 </LinearLayout>
 
 //strings.xml
-
 
 <resources>
     <string name="app_name">AudioStream</string>
