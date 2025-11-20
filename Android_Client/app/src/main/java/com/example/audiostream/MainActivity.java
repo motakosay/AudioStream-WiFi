@@ -8,9 +8,11 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.RadioButton;
 import android.widget.TextView;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 public class MainActivity extends Activity {
@@ -20,6 +22,7 @@ public class MainActivity extends Activity {
     private Thread streamThread = null;
     private Socket socket = null;
     private String currentIp = "";
+    private int currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO; // default mono
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,11 +35,18 @@ public class MainActivity extends Activity {
         int connectBtnId = getResources().getIdentifier("connectBtn", "id", getPackageName());
         int stopBtnId = getResources().getIdentifier("stopBtn", "id", getPackageName());
         int statusViewId = getResources().getIdentifier("statusView", "id", getPackageName());
+        int monoBtnId = getResources().getIdentifier("monoBtn", "id", getPackageName());
+        int stereoBtnId = getResources().getIdentifier("stereoBtn", "id", getPackageName());
 
         final EditText ipInput = findViewById(ipInputId);
         Button connectBtn = findViewById(connectBtnId);
         Button stopBtn = findViewById(stopBtnId);
         statusView = findViewById(statusViewId);
+        final RadioButton monoBtn = findViewById(monoBtnId);
+        final RadioButton stereoBtn = findViewById(stereoBtnId);
+
+        // Default selection
+        monoBtn.setChecked(true);
 
         connectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -44,6 +54,11 @@ public class MainActivity extends Activity {
                 final String ip = ipInput.getText().toString().trim();
                 if (!ip.isEmpty()) {
                     currentIp = ip;
+                    if (monoBtn.isChecked()) {
+                        currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
+                    } else if (stereoBtn.isChecked()) {
+                        currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                    }
                     startStreaming(ip);
                 } else {
                     statusView.setText("Enter a valid IP!");
@@ -76,18 +91,25 @@ public class MainActivity extends Activity {
                         });
 
                         socket = new Socket(ip, 8765);
+
+                        // Handshake: tell server mono or stereo
+                        String handshake = "CHANNELS:" + (currentChannelConfig == AudioFormat.CHANNEL_OUT_MONO ? "1" : "2");
+                        OutputStream out = socket.getOutputStream();
+                        out.write(handshake.getBytes());
+                        out.flush();
+
                         InputStream in = socket.getInputStream();
 
                         int minBuf = AudioTrack.getMinBufferSize(
                                 48000,
-                                AudioFormat.CHANNEL_OUT_STEREO,
+                                currentChannelConfig,
                                 AudioFormat.ENCODING_PCM_16BIT
                         );
 
                         audioTrack = new AudioTrack(
                                 AudioManager.STREAM_MUSIC,
                                 48000,
-                                AudioFormat.CHANNEL_OUT_STEREO,
+                                currentChannelConfig,
                                 AudioFormat.ENCODING_PCM_16BIT,
                                 minBuf,
                                 AudioTrack.MODE_STREAM
@@ -101,10 +123,13 @@ public class MainActivity extends Activity {
                             }
                         });
 
-                        byte[] buffer = new byte[4096];
+                        byte[] buffer = new byte[minBuf];
                         int read;
                         while (isStreaming && (read = in.read(buffer)) != -1) {
-                            audioTrack.write(buffer, 0, read);
+                            int written = audioTrack.write(buffer, 0, read);
+                            if (written < 0) {
+                                resetAudioTrack();
+                            }
                         }
 
                     } catch (Exception e) {
@@ -114,14 +139,13 @@ public class MainActivity extends Activity {
                                 statusView.setText("Connection lost, retrying...");
                             }
                         });
-                        cleanupAudioOnly(); // don't stop the loop, just reset audio
-                        sleep(2000); // wait before retry
+                        cleanupAudioOnly();
+                        sleep(2000);
                     } finally {
                         cleanupSocketOnly();
                     }
                 }
-                cleanup(); // final cleanup when stopped
-
+                cleanup();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -132,6 +156,24 @@ public class MainActivity extends Activity {
         });
 
         streamThread.start();
+    }
+
+    private void resetAudioTrack() {
+        cleanupAudioOnly();
+        int minBuf = AudioTrack.getMinBufferSize(
+                48000,
+                currentChannelConfig,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+        audioTrack = new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                48000,
+                currentChannelConfig,
+                AudioFormat.ENCODING_PCM_16BIT,
+                minBuf,
+                AudioTrack.MODE_STREAM
+        );
+        audioTrack.play();
     }
 
     private void stopStreaming() {
