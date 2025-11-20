@@ -12,18 +12,51 @@
         android:layout_height="wrap_content"
         android:inputType="text"/>
 
+    <!-- Label for audio mode selection -->
+    <TextView
+        android:id="@+id/channelLabel"
+        android:text="Select Audio Mode:"
+        android:textStyle="bold"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingTop="12dp"
+        android:paddingBottom="4dp"/>
+
+    <!-- Grouped Mono/Stereo selection -->
+    <RadioGroup
+        android:id="@+id/channelGroup"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/monoBtn"
+            android:text="Mono"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"/> <!-- ✅ Default selection -->
+
+        <RadioButton
+            android:id="@+id/stereoBtn"
+            android:text="Stereo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"/>
+    </RadioGroup>
+
     <Button
         android:id="@+id/connectBtn"
         android:text="Connect"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"/>
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"/>
 
     <Button
         android:id="@+id/stopBtn"
         android:text="Stop"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp" />
+        android:layout_marginTop="12dp"/>
 
     <TextView
         android:id="@+id/statusView"
