@@ -1,16 +1,15 @@
+#server.py
+
 import pyaudio
 import socket
 import threading
-import time
 
 # 🎚️ Audio settings
-CHUNK = 500 #chunks basic = 1024
+CHUNK = 1024
 FORMAT = pyaudio.paInt16
-CHANNELS = 1  # Change to 1 for mono #basic 2
 RATE = 48000
-PORT = 8765  # Must match Android app
+PORT = 8765
 
-# 🎛️ Initialize PyAudio
 p = pyaudio.PyAudio()
 
 # 🔍 Find VB-Cable input device
@@ -24,23 +23,33 @@ def find_vb_cable():
 
 input_index = find_vb_cable()
 
-# 🎤 Open audio stream
-stream = p.open(format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                input_device_index=input_index,
-                frames_per_buffer=CHUNK)
-
 clients = []
 
 # 🧵 Handle each client
 def client_handler(conn, addr):
     print(f"🔗 Connected: {addr}")
     try:
+        # First message from client = channel request
+        handshake = conn.recv(16).decode().strip()
+        if handshake.startswith("CHANNELS:"):
+            channels = int(handshake.split(":")[1])
+        else:
+            channels = 1  # default mono
+
+        print(f"🎛️ Client {addr} requested {channels} channel(s)")
+
+        # Open audio stream with requested channels
+        stream = p.open(format=FORMAT,
+                        channels=channels,
+                        rate=RATE,
+                        input=True,
+                        input_device_index=input_index,
+                        frames_per_buffer=CHUNK)
+
         while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             conn.sendall(data)
+
     except Exception as e:
         print(f"⚡ Disconnected: {addr} — {type(e).__name__}: {e}")
     finally:
@@ -48,6 +57,11 @@ def client_handler(conn, addr):
             conn.close()
             clients.remove(conn)
         except ValueError:
+            pass
+        try:
+            stream.stop_stream()
+            stream.close()
+        except Exception:
             pass
 
 # 🌐 TCP server setup
@@ -66,7 +80,5 @@ except KeyboardInterrupt:
     print("🕊️ Graceful shutdown initiated...")
 finally:
     server.close()
-    stream.stop_stream()
-    stream.close()
     p.terminate()
     print("🔚 Audio stream closed.")
