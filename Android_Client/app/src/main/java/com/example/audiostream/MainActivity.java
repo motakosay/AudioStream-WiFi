@@ -1,9 +1,12 @@
 package com.example.audiostream;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothAdapter;
+import android.content.Context;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -13,6 +16,7 @@ import android.widget.TextView;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 
 public class MainActivity extends Activity {
@@ -23,6 +27,9 @@ public class MainActivity extends Activity {
     private Socket socket = null;
     private String currentIp = "";
     private int currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO; // default mono
+
+    private WifiManager wifiManager;
+    private BluetoothAdapter bluetoothAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,21 +55,37 @@ public class MainActivity extends Activity {
         // Default selection
         monoBtn.setChecked(true);
 
+        wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
         connectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                final String ip = ipInput.getText().toString().trim();
-                if (!ip.isEmpty()) {
-                    currentIp = ip;
-                    if (monoBtn.isChecked()) {
-                        currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
-                    } else if (stereoBtn.isChecked()) {
-                        currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                ensureConnectivity();
+
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        String ip = findServerIp();
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (ip != null) {
+                                    currentIp = ip;
+                                    if (monoBtn.isChecked()) {
+                                        currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
+                                    } else if (stereoBtn.isChecked()) {
+                                        currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                                    }
+                                    statusView.setText("Found server at " + ip + " — connecting...");
+                                    startStreaming(ip);
+                                } else {
+                                    statusView.setText("Know IP of your Device then type it");
+                                }
+                            }
+                        });
                     }
-                    startStreaming(ip);
-                } else {
-                    statusView.setText("Enter a valid IP!");
-                }
+                }).start();
             }
         });
 
@@ -72,6 +95,26 @@ public class MainActivity extends Activity {
                 stopStreaming();
             }
         });
+    }
+
+    private void ensureConnectivity() {
+        if (!wifiManager.isWifiEnabled()) {
+            wifiManager.setWifiEnabled(true);
+        }
+        if (bluetoothAdapter != null && !bluetoothAdapter.isEnabled()) {
+            bluetoothAdapter.enable();
+        }
+    }
+
+    private String findServerIp() {
+        for (int i = 2; i < 255; i++) {
+            String testIp = "192.168.1." + i;
+            try (Socket testSocket = new Socket()) {
+                testSocket.connect(new InetSocketAddress(testIp, 8765), 500);
+                return testIp;
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 
     private void startStreaming(final String ip) {
@@ -92,7 +135,6 @@ public class MainActivity extends Activity {
 
                         socket = new Socket(ip, 8765);
 
-                        // Handshake: tell server mono or stereo
                         String handshake = "CHANNELS:" + (currentChannelConfig == AudioFormat.CHANNEL_OUT_MONO ? "1" : "2");
                         OutputStream out = socket.getOutputStream();
                         out.write(handshake.getBytes());
