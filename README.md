@@ -15,6 +15,7 @@ Stream your computer's audio live to your Android phone over Wi-Fi — works eve
 - opus
 
 ## tips
-- remove temp, %temp% to sync picture & sound
+- open batch file first then press connect in your app, to memorize 'com--> cm, computer then mobile. 😊'
 - the app disconnects due to system power-saving policies. (you need to 'not optimize Battery' option)
+
 
