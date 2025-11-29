@@ -61,29 +61,36 @@ public class MainActivity extends Activity {
         connectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ensureConnectivity();
-
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        String ip = findServerIp();
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (ip != null) {
-                                    currentIp = ip;
-                                    if (monoBtn.isChecked()) {
-                                        currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
-                                    } else if (stereoBtn.isChecked()) {
-                                        currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                        if (ensureConnectivity()) {
+                            final String ip = findServerIp();
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (ip != null) {
+                                        currentIp = ip;
+                                        if (monoBtn.isChecked()) {
+                                            currentChannelConfig = AudioFormat.CHANNEL_OUT_MONO;
+                                        } else if (stereoBtn.isChecked()) {
+                                            currentChannelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+                                        }
+                                        statusView.setText("Found server at " + ip + " — connecting...");
+                                        startStreaming(ip);
+                                    } else {
+                                        statusView.setText("Know IP of your Device then type it");
                                     }
-                                    statusView.setText("Found server at " + ip + " — connecting...");
-                                    startStreaming(ip);
-                                } else {
-                                    statusView.setText("Know IP of your Device then type it");
                                 }
-                            }
-                        });
+                            });
+                        } else {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    statusView.setText("X Wi-Fi or Bluetooth not connected");
+                                }
+                            });
+                        }
                     }
                 }).start();
             }
@@ -97,13 +104,35 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void ensureConnectivity() {
-        if (!wifiManager.isWifiEnabled()) {
+    private boolean isWifiConnected() {
+        if (wifiManager == null) return false;
+        return wifiManager.getConnectionInfo() != null &&
+               wifiManager.getConnectionInfo().getNetworkId() != -1;
+    }
+
+    private boolean isBluetoothConnected() {
+        if (bluetoothAdapter == null) return false;
+        return bluetoothAdapter.isEnabled() &&
+               bluetoothAdapter.getBondedDevices().size() > 0;
+    }
+
+    private boolean ensureConnectivity() {
+        boolean wifiOk = isWifiConnected();
+        boolean btOk = isBluetoothConnected();
+
+        if (!wifiOk) {
             wifiManager.setWifiEnabled(true);
+            sleep(3000); // wait for Wi-Fi to connect
+            wifiOk = isWifiConnected();
         }
-        if (bluetoothAdapter != null && !bluetoothAdapter.isEnabled()) {
+
+        if (!btOk && bluetoothAdapter != null) {
             bluetoothAdapter.enable();
+            sleep(3000); // wait for Bluetooth to enable
+            btOk = isBluetoothConnected();
         }
+
+        return wifiOk && btOk;
     }
 
     private String findServerIp() {
